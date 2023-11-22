@@ -1,5 +1,6 @@
 import numpy as np #(működik a Moodle-ben is)
 import math
+import csv
 
 ######################## 1. feladat, entrópiaszámítás #########################
 def get_entropy(n_cat1: int, n_cat2: int) -> float:
@@ -57,9 +58,47 @@ def get_best_separation(features: list, labels: list) -> (int, int):
 
     return best_separation_feature, best_separation_value
 
+def read_file(path: str, training_data: bool) -> (np.array, np.array):
+    file = open(path)
+    csv_reader = csv.reader(file)
+    features = np.array([[0,0,0,0,0,0,0,0]])
+    labels = np.empty([])
+    for row in csv_reader:
+        if not training_data: np.append(features, row, axis=0)
+        else:
+            for i in range(len(row)):
+                row[i] = int(row[i])
+            
+            without_label = np.array([row[0:len(row)-1]])
+            label = row[len(row) - 1]
+            features = np.append(features, without_label, axis=0)
+            labels = np.append(labels, label)
+
+    file.close()
+    features = np.delete(features, 0, axis=0)
+    if not training_data: labels = None
+    return features, labels
+
+def get_sub_arrays(features: list, a: int, col: int) -> (list, list):
+    e = []
+    f = []
+    for row in range(features.shape[0]):
+        if features[row][col] <= a: e.append(row)
+        else: f.append(row)
+    
+    return e,f
+
+def get_entropy_of_array(labels: list, indxs: list) -> float:
+    label_count = [0, 0]
+    for row in indxs:
+        label_count[labels[row]] += 1
+
+    return get_entropy(label_count[0], label_count[1])
 ################### 3. feladat, döntési fa implementációja ####################
 def main():
     #TODO: implementálja a döntési fa tanulását!
+    (features, labels) = read_file('train.csv', True)
+
     
 
 
