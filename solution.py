@@ -14,15 +14,6 @@ def get_entropy(n_cat1: int, n_cat2: int) -> float:
 
     return entropy
 
-
-def get_min_max(features: list, col: int) -> (int, int):
-    min_val = max_val = features[0][col]
-    for row in features:
-        if row[col] > max_val: max_val = row[col]
-        elif row[col] < min_val: min_val = row[col]
-
-    return min_val, max_val
-
 ###################### 2. feladat, optimális szeparáció #######################
 def get_best_separation(features: list, labels: list) -> (int, int):
     best_separation_feature, best_separation_value = 0, 0
@@ -36,13 +27,12 @@ def get_best_separation(features: list, labels: list) -> (int, int):
     current_best_info_gain = 0
 
     for col in range(features.shape[1]):
-        (min_a, max_a) = get_min_max(features, col)
-
-        for a_iterator in range(min_a, max_a, 1):
+        for row in features:
             e_labels = [0, 0]
             f_labels = [0, 0]
             e = 0
             f = 0
+            a_iterator = row[col]
             for second_scan in range(features.shape[0]):
                 if features[second_scan][col] <= a_iterator:
                     e += 1
@@ -61,14 +51,13 @@ def get_best_separation(features: list, labels: list) -> (int, int):
 def read_file(path: str, training_data: bool) -> (np.array, np.array):
     file = open(path)
     csv_reader = csv.reader(file)
-    features = np.array([[0,0,0,0,0,0,0,0]])
-    labels = np.empty([])
+    features = np.array([[0,0,0,0,0,0,0,0]]).astype(int)
+    labels = np.empty([]).astype(int)
     for row in csv_reader:
-        if not training_data: np.append(features, row, axis=0)
-        else:
-            for i in range(len(row)):
+        for i in range(len(row)):
                 row[i] = int(row[i])
-            
+        if not training_data: features = np.append(features, [row], axis=0)
+        else:
             without_label = np.array([row[0:len(row)-1]])
             label = row[len(row) - 1]
             features = np.append(features, without_label, axis=0)
@@ -76,31 +65,90 @@ def read_file(path: str, training_data: bool) -> (np.array, np.array):
 
     file.close()
     features = np.delete(features, 0, axis=0)
+    labels = np.delete(labels, 0)
     if not training_data: labels = None
     return features, labels
 
-def get_sub_arrays(features: list, a: int, col: int) -> (list, list):
-    e = []
-    f = []
-    for row in range(features.shape[0]):
-        if features[row][col] <= a: e.append(row)
-        else: f.append(row)
-    
-    return e,f
+def get_sub_arrays(features: list, labels:list, a: int, col: int) -> ((list, list), (list, list)):
+    e = np.array([[0,0,0,0,0,0,0,0]]).astype(int)
+    f = np.array([[0,0,0,0,0,0,0,0]]).astype(int)
 
-def get_entropy_of_array(labels: list, indxs: list) -> float:
+    e_labels = np.array(0).astype(int)
+    f_labels = np.array(0).astype(int)
+    for row in range(features.shape[0]):
+        if features[row][col] <= a:
+            e = np.append(e, [features[row]], axis=0)
+            e_labels = np.append(e_labels, labels[row]) 
+        else:
+            f = np.append(f, [features[row]], axis=0)
+            f_labels = np.append(f_labels, labels[row])
+
+    e = np.delete(e, 0, axis=0)
+    f = np.delete(f, 0, axis=0)
+
+    e_labels = np.delete(e_labels, 0)
+    f_labels = np.delete(f_labels, 0)
+
+    return (e, e_labels), (f, f_labels)
+
+def get_entropy_of_array(labels: list) -> float:
     label_count = [0, 0]
-    for row in indxs:
-        label_count[labels[row]] += 1
+    for row in labels:
+        label_count[row] += 1
 
     return get_entropy(label_count[0], label_count[1])
+
+class TreeNode:
+    def __init__(self):
+        self.children = list()
+        self.values = (int, int)
+    label_value = -1
+
+
+def populate_tree(root: TreeNode ,features: list, labels: list):
+    e_child = TreeNode()
+    f_child = TreeNode()
+    ((e_features, e_labels),(f_features, f_labels)) = get_sub_arrays(features, labels, root.values[1], root.values[0])
+    
+    if np.isclose(get_entropy_of_array(labels), 0.0):
+        root.label_value = 1 if labels.tolist().count(0) == 0 else 0
+        return 
+
+    #e component
+
+    e_child.values = get_best_separation(e_features, e_labels)
+    root.children.append(e_child)
+    populate_tree(e_child, e_features, e_labels)
+
+    #f component
+
+    f_child.values = get_best_separation(f_features, f_labels)
+    root.children.append(f_child)
+    populate_tree(f_child, f_features, f_labels)
+
+def iterate_tree(root: TreeNode, row: list) -> int:
+    if root.label_value != -1: return root.label_value
+    if root.values[1] >= row[root.values[0]]: return iterate_tree(root.children[0], row)
+    else: return iterate_tree(root.children[1], row)
+
+
+def speculate_label(features: list, root: TreeNode):
+    with open('results.csv', 'w', newline='') as file:
+        writer = csv.writer(file)
+        for row in features:
+            writer.writerow([iterate_tree(root, row)])
+
 ################### 3. feladat, döntési fa implementációja ####################
 def main():
-    #TODO: implementálja a döntési fa tanulását!
     (features, labels) = read_file('train.csv', True)
-
     
+    root = TreeNode()
+    root.values = get_best_separation(features, labels)
+    populate_tree(root, features, labels) 
 
+    (features, labels) = read_file('test.csv', False)
+
+    speculate_label(features, root)
 
     return 0
 
